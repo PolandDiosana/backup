@@ -51,7 +51,7 @@ export async function POST(request) {
       // ── Vercel Blob ──────────────────────────────────────────────────────
       const { put } = await import('@vercel/blob');
       const blob = await put(`backups/${id}.zip`, buffer, {
-        access: 'public',      // 'private' requires signed URLs; 'public' works for personal use
+        access: 'private',   // works with both private and public stores
         contentType: 'application/zip',
       });
       blobUrl = blob.url;

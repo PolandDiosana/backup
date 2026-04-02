@@ -125,7 +125,17 @@ export default function Home() {
       formData.append('folderName', topFolderName);
 
       const res = await fetch('/api/backup/upload', { method: 'POST', body: formData });
-      const data = await res.json();
+
+      // Safely parse response — server may return plain text on errors (e.g. 413)
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        if (res.status === 413) {
+          throw new Error('The folder is too large to upload in one go. Try a smaller folder or split it up.');
+        }
+        throw new Error(`Server error (${res.status}). Please try again.`);
+      }
       if (!res.ok) throw new Error(data.error || "Upload failed");
 
       setUploadStep(3);

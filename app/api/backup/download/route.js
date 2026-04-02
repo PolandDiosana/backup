@@ -35,9 +35,13 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Blob URL missing for this backup' }, { status: 500 });
       }
 
-      // Force a file download by passing through with Content-Disposition header.
-      // We fetch from Blob and pipe it back so the browser downloads it properly.
-      const blobRes = await fetch(backup.blobUrl);
+      // Fetch the private blob server-side (server holds the token) then
+      // stream it to the browser so users don't need direct Blob access.
+      const blobRes = await fetch(backup.blobUrl, {
+        headers: {
+          Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
+        },
+      });
       if (!blobRes.ok) {
         return NextResponse.json({ error: 'Could not fetch file from Blob storage' }, { status: 502 });
       }
