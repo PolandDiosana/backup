@@ -37,6 +37,7 @@ export default function Home() {
   const [error, setError] = useState('');
   const [loginError, setLoginError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [useClientUpload, setUseClientUpload] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleLogin = (e) => {
@@ -44,6 +45,11 @@ export default function Home() {
     if (password === 'admin') {
       setIsAuthenticated(true);
       fetchBackups();
+      // Detect whether we're on Vercel (direct Blob upload) or local (API route upload)
+      fetch('/api/config')
+        .then(r => r.json())
+        .then(d => setUseClientUpload(d.useClientUpload))
+        .catch(() => setUseClientUpload(false));
     } else {
       setLoginError("Incorrect password. Please try again.");
     }
@@ -120,23 +126,45 @@ export default function Home() {
       setUploadStep(2);
       setUploadMsg("Uploading to secure cloud storage...");
 
-      const formData = new FormData();
-      formData.append('file', zipBlob, `${topFolderName}.zip`);
-      formData.append('folderName', topFolderName);
+      if (useClientUpload) {
+        // ── Vercel: upload directly from browser to Blob CDN ────────────────
+        // The file NEVER touches the serverless function body, so Vercel's
+        // 4.5 MB limit is completely bypassed.
+        const { upload } = await import('@vercel/blob/client');
+        const blob = await upload(
+          `backups/${topFolderName}_${Date.now()}.zip`,
+          zipBlob,
+          {
+            access: 'private',
+            handleUploadUrl: '/api/blob',
+          }
+        );
 
-      const res = await fetch('/api/backup/upload', { method: 'POST', body: formData });
+        // Save metadata separately (no file content, just URL + name + size)
+        const metaRes = await fetch('/api/backup/metadata', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: topFolderName, size: zipBlob.size, blobUrl: blob.url }),
+        });
+        const metaData = await metaRes.json();
+        if (!metaRes.ok) throw new Error(metaData.error || 'Failed to save backup metadata');
 
-      // Safely parse response — server may return plain text on errors (e.g. 413)
-      let data;
-      try {
-        data = await res.json();
-      } catch {
-        if (res.status === 413) {
-          throw new Error('The folder is too large to upload in one go. Try a smaller folder or split it up.');
+      } else {
+        // ── Local dev: upload through the API route ──────────────────────────
+        const formData = new FormData();
+        formData.append('file', zipBlob, `${topFolderName}.zip`);
+        formData.append('folderName', topFolderName);
+
+        const res = await fetch('/api/backup/upload', { method: 'POST', body: formData });
+
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error(`Server error (${res.status}). Please try again.`);
         }
-        throw new Error(`Server error (${res.status}). Please try again.`);
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
       }
-      if (!res.ok) throw new Error(data.error || "Upload failed");
 
       setUploadStep(3);
       setUploadMsg("Backup saved successfully!");

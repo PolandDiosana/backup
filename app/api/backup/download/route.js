@@ -12,7 +12,7 @@ import { getBackups } from '@/lib/db';
 import fs from 'fs';
 import path from 'path';
 
-const isVercel = !!process.env.BLOB_READ_WRITE_TOKEN;
+const isVercel = !!process.env.VERCEL || !!process.env.BLOB_READ_WRITE_TOKEN;
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);

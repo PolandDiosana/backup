@@ -24,7 +24,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 
-const isVercel = !!process.env.BLOB_READ_WRITE_TOKEN;
+const isVercel = !!process.env.VERCEL || !!process.env.BLOB_READ_WRITE_TOKEN;
 
 // Raise Next.js body-size limit to 500 MB (local dev only; Vercel ignores this)
 export const config = {
